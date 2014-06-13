@@ -1,0 +1,22 @@
+{
+  "name": "sear-require",
+  "main": "index.js",
+  "version": "0.0.1",
+  "homepage": "https://github.com/Everyplay/sear-require",
+  "authors": [
+    "Jaakko Lukkari <jaakko@applifier.com>"
+  ],
+  "description": "When even almond has too much stuff (you dont need normalization etc.)",
+  "keywords": [
+    "sear",
+    "require"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

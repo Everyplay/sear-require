@@ -1,0 +1,22 @@
+{
+  "name": "sear-require",
+  "version": "0.0.1",
+  "description": "When even almond has too much stuff (you dont need normalization etc.) ",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Everyplay/sear-require.git"
+  },
+  "author": "Jaakko Lukkari",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Everyplay/sear-require/issues"
+  },
+  "devDependencies": {
+    "mocha": "~1.18.2",
+    "chai": "~1.9.1"
+  }
+}
