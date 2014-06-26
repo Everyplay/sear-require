@@ -1,6 +1,6 @@
 {
   "name": "sear-require",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "When even almond has too much stuff (you dont need normalization etc.) ",
   "main": "index.js",
   "scripts": {
