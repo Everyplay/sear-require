@@ -59,8 +59,11 @@ describe('Test baker-require', function () {
   });
 
   it('should not freeze on circular dependency', function (next) {
-    bakerRequire.define('dep1', ['exports', 'dep2'], function (exports, dep) {
-      exports.dep2 = dep;
+    bakerRequire.define('dep1', ['exports', 'require', 'dep2'], function (exports, require, dep) {
+      exports.foo = 'bar';
+      exports.dep2 = function () {
+        return require('dep2');
+      };
     });
     bakerRequire.define('dep2', ['exports', 'dep1'], function (exports, dep) {
       exports.dep1 = dep;
@@ -69,10 +72,10 @@ describe('Test baker-require', function () {
     var mod = bakerRequire.require('dep1');
     mod.should.exist;
 
-    process.nextTick(function () {
-      mod.dep2.dep1.should.be.equal(mod);
+    setTimeout(function () {
+      mod.dep2().dep1.should.be.equal(mod);
       next();
-    });
+    }, 1000);
   });
 
   it('should support defining an empty module', function () {
@@ -95,5 +98,28 @@ describe('Test baker-require', function () {
       bar.should.equal(bakerRequire.require('bar'));
       next();
     })
+  });
+
+  it('should throw error when module not loaded', function (next) {
+    try {
+      bakerRequire.require('notloaded');
+    } catch(e) {
+      e.message.should.equal('Module notloaded is not defined');
+      next();
+    }
+  });
+
+  it('should try to load module async', function (next) {
+    bakerRequire.require._load = function (module) {
+      module.should.equal('async');
+      setTimeout(function () {
+        bakerRequire.define('async', {foo: 'bar'})
+      }, 1000);
+    };
+
+    bakerRequire.require('async', function (module) {
+      module.foo.should.equal('bar');
+      next();
+    });
   });
 });

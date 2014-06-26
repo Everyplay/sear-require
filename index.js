@@ -3,24 +3,70 @@
 var define, require;
 
 (function (undefined) {
-  var moduleMap = {};
+  var moduleData = {};
 
-  function process(moduleData) {
-    var name = moduleData.name;
-    var deps = moduleData.deps;
-    var callback = moduleData.cb;
-    var waiting = moduleData.waiting;
-    var defining = moduleData.defining;
-    var defined = moduleData.defined;
-    var exports = moduleData.exports;
-    var module = moduleData.module;
+  var STATUS_INIT = 0;
+  var STATUS_LOADING = 1;
+  var STATUS_DEFINING = 2;
+  var STATUS_DEFINED = 3;
+  var STATUS_PROCESSED = 4;
+  var STATUS_LOADING_DEPS = 5;
+  var STATUS_PROCESSING= 6;
 
-    if (defined || defining) {
+  function getDef(name) {
+    if (!moduleData[name]) {
+      var exports = {};
+      var module = {
+        id: name,
+        exports: exports
+      };
+      moduleData[name] = {
+        module: module,
+        exports: exports,
+        name: name,
+        status: STATUS_INIT,
+        listeners: []
+      };
+    }
+    return moduleData[name];
+  }
+
+  function fire(arr, args) {
+    if (arr) {
+      var i = 0, length = arr.length;
+      for (; i < length; i++) {
+        arr[i].apply(this, args);
+      }
+    }
+  }
+
+  function process(moduleDef, load) {
+    var deps = moduleDef.deps;
+    var module = moduleDef.module;
+    var exports = moduleDef.exports;
+    var callback = moduleDef.callback;
+    var name = moduleDef.name;
+    var status = moduleDef.status;
+
+    switch (status) {
+    case STATUS_INIT:
+      throw new Error('Module ' + name + ' is not defined');
+      break;
+    case STATUS_LOADING:
+        throw new Error('Module ' + name + ' is not loaded');
+        break;
+    case STATUS_DEFINING:
+      // process when ready to populate module.exports
+      moduleDef.listeners.push(function () {
+        process(moduleDef);
+      });
+    case STATUS_PROCESSED:
+    case STATUS_PROCESSING:
       return module.exports;
+      break;
     }
 
-    moduleData.waiting = false;
-    moduleData.defining = true;
+    moduleDef.status = STATUS_PROCESSING;
 
     var args = [];
     var i = 0, dep;
@@ -43,12 +89,11 @@ var define, require;
       callback.apply(null, args) :
       callback;
 
-    moduleData.defined = true;
-    moduleData.defining = false;
-
     if (typeof result !== 'undefined') {
       module.exports = result;
     }
+
+    moduleDef.status = STATUS_PROCESSED;
 
     return module.exports;
   }
@@ -59,45 +104,134 @@ var define, require;
       deps = ['require', 'exports', 'module'];
     }
 
-    var exports = {};
-    var module = {
-      id: name,
-      exports: exports
-    };
+    var moduleDef = getDef(name);
+    moduleDef.deps = deps;
+    moduleDef.callback = callback;
+    moduleDef.status = STATUS_DEFINING;
 
-    moduleMap[name] = {
-      name: name,
-      deps: deps,
-      cb: callback,
-      exports: exports,
-      module: module,
-      waiting: true
-    };
+    var count = 0;
+    var i = 0, dep, length = deps.length;
+
+    function ready() {
+      moduleDef.status = STATUS_DEFINED;
+      fire(moduleDef.listeners);
+      moduleDef.listeners = [];
+    }
+
+    function depLoaded() {
+      count++;
+      if (count === deps.length) {
+        ready();
+      }
+    }
+
+    if (length > 0) {
+      for (; i < length; i++) {
+        dep = deps[i];
+
+        if (dep === 'module' ||
+            dep === 'exports' ||
+            dep === 'require') {
+          depLoaded();
+        } else {
+          require._async(dep, depLoaded);
+        }
+      }
+    } else {
+      ready();
+    }
   };
 
   define.amd = {};
 
   require = function (name, callback) {
-    var res;
-    if (typeof name === 'string' && typeof callback === 'undefined') {
-      return process(moduleMap[name]);
+    var moduleDef;
+    var async = typeof callback === 'function';
+
+    if (!async && !name.splice) {
+      moduleDef = getDef(name);
+      return process(moduleDef);
     } else {
-      if (name.splice) {
-        res = [];
-        var i = 0;
-        for (; i < name.length; i++) {
-          res.push(require(name[i]));
+      var count = 0;
+      var results = [];
+      name = name.splice ? name : [name];
+
+      function modLoaded() {
+        count++;
+        if (count === name.length &&
+            typeof callback === 'function') {
+          callback.apply(this, results);
         }
-      } else {
-        res = [process(moduleMap[name])];
       }
+
+      var i = 0, length = name.length;
+      for (; i < length; i++) {
+        (function (name) {
+          require._async(name, function () {
+            moduleDef = getDef(name);
+            results.push(process(moduleDef));
+            modLoaded();
+          });
+        })(name[i]);
+      }
+
+      return results;
+    }
+  };
+
+  require._async = function (name, callback) {
+    var moduleDef = getDef(name);
+
+    switch (moduleDef.status) {
+    case STATUS_INIT:
+        moduleDef.listeners.push(callback);
+        require._load(name);
+        break;
+    case STATUS_LOADING:
+        moduleDef.listeners.push(callback);
+      break;
+    case STATUS_DEFINING:
+    case STATUS_LOADING_DEPS:
+    case STATUS_DEFINED:
+    case STATUS_PROCESSED:
+      callback();
+      break;
+    }
+  };
+
+  require._browserLoad = function (name) {
+    var path = '/' + name.replace(/\.js$/, '').replace(/^\//, '');
+
+    if (require.add_js) {
+      name += '.js';
     }
 
-    if (typeof callback === 'function') {
-      callback.apply(null, res);
-    } else {
-      return res;
-    }
+    path += '?amd=true';
+
+    var root = (require.root || '/').replace(/\/$/, '');
+
+    var fileref = document.createElement('script');
+    fileref.setAttribute("type", "text/javascript");
+    fileref.setAttribute("async", "true");
+    fileref.setAttribute("src", root + path);
+    fileref.addEventListener("error", function () {
+      throw new Error(name + ' failed to load');
+    });
+    document.getElementsByTagName("head")[0].appendChild(fileref);
+  };
+
+  require._load = function (name) {
+    var moduleDef = getDef(name);
+    moduleDef.status = STATUS_LOADING;
+    setTimeout(function () {
+      if (moduleDef.status === STATUS_LOADING) {
+        if (typeof window !== 'undefined') {
+          require._browserLoad(name);
+        } else {
+          throw new Error("Async loading works only in browser");
+        }
+      }
+    }, 1);
   };
 })();
 
