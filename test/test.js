@@ -122,4 +122,41 @@ describe('Test baker-require', function () {
       next();
     });
   });
+
+  it('should require on lazyload', function (next) {
+    bakerRequire.require._load = function (module) {
+      module.should.equal('lazy');
+      setTimeout(function () {
+        bakerRequire.define('lazy', {foo: 'bar'})
+      }, 1000);
+    };
+    bakerRequire.lazyload('lazy', function (module) {
+      module.foo.should.equal('bar');
+      next();
+    });
+  });
+
+  it('should use custom loader on lazyload', function (next) {
+    bakerRequire.require._load = function (module) {
+      module.should.equal('lazy');
+      setTimeout(function () {
+        bakerRequire.define('lazy', {foo: 'bar'})
+      }, 1000);
+    };
+    bakerRequire.lazyload._custom_loader = function (module, callback) {
+      return {
+        result: {
+          'bar': 'baz'
+        },
+        callback: function (module) {
+          callback(module);
+        }
+      }
+    };
+    var result = bakerRequire.lazyload('lazy', function (module) {
+      module.foo.should.equal('bar');
+      next();
+    });
+    result.bar.should.equal('baz');
+  });
 });

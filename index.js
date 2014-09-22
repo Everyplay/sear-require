@@ -1,6 +1,6 @@
 
 // Make possible for the minifier to minify defines
-var define, require;
+var define, require, lazyload;
 
 (function (undefined) {
   var moduleData = {};
@@ -80,6 +80,8 @@ var define, require;
         args.push(exports);
       } else if (dep === 'require') {
         args.push(require);
+      } else if (dep === 'lazyload') {
+        args.push(lazyload);
       } else if(typeof callback === 'function' && callback.length > i) {
         args.push(require(dep));
       }
@@ -179,6 +181,21 @@ var define, require;
     }
   };
 
+  lazyload = function (name, callback) {
+    var returnValue;
+    if (lazyload._custom_loader) {
+      var customLL = lazyload._custom_loader.apply(null, arguments);
+      returnValue = customLL.result;
+      callback = customLL.callback;
+    }
+    require(name, function (module) {
+      if (callback) {
+        callback(module);
+      }
+    });
+    return returnValue;
+  };
+
   require._async = function (name, callback) {
     var moduleDef = getDef(name);
 
@@ -239,4 +256,9 @@ var define, require;
 if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
   module.exports.define = define;
   module.exports.require = require;
+  module.exports.lazyload = lazyload;
+} else {
+  window.define = define;
+  window.require = require;
+  window.lazyload = lazyload;
 }
